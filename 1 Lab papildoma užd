@@ -1,0 +1,157 @@
+clc 
+clear all  
+%Classification using perceptron 
+%Reading apple images 
+A1=imread('apple_04.jpg'); 
+A2=imread('apple_05.jpg'); 
+A3=imread('apple_06.jpg'); 
+A4=imread('apple_07.jpg'); 
+A5=imread('apple_11.jpg'); 
+A6=imread('apple_12.jpg'); 
+A7=imread('apple_13.jpg'); 
+A8=imread('apple_17.jpg'); 
+A9=imread('apple_19.jpg'); 
+%Reading pears images 
+P1=imread('pear_01.jpg'); 
+P2=imread('pear_02.jpg'); 
+P3=imread('pear_03.jpg'); 
+P4=imread('pear_09.jpg'); 
+
+%Calculate for each image, colour and roundness 
+%For Apples 
+%1st apple image(A1) 
+hsv_value_A1=spalva_color(A1); %color 
+metric_A1=apvalumas_roundness(A1); %roundness 
+%2nd apple image(A2) 
+hsv_value_A2=spalva_color(A2); %color 
+metric_A2=apvalumas_roundness(A2); %roundness 
+%3rd apple image(A3) 
+hsv_value_A3=spalva_color(A3); %color 
+metric_A3=apvalumas_roundness(A3); %roundness 
+%4th apple image(A4) 
+hsv_value_A4=spalva_color(A4); %color 
+metric_A4=apvalumas_roundness(A4); %roundness 
+%5th apple image(A5) 
+hsv_value_A5=spalva_color(A5); %color 
+metric_A5=apvalumas_roundness(A5); %roundness 
+%6th apple image(A6) 
+hsv_value_A6=spalva_color(A6); %color 
+metric_A6=apvalumas_roundness(A6); %roundness 
+%7th apple image(A7) 
+hsv_value_A7=spalva_color(A7); %color 
+metric_A7=apvalumas_roundness(A7); %roundness 
+%8th apple image(A8) 
+hsv_value_A8=spalva_color(A8); %color 
+metric_A8=apvalumas_roundness(A8); %roundness 
+%9th apple image(A9) 
+hsv_value_A9=spalva_color(A9); %color 
+metric_A9=apvalumas_roundness(A9); %roundness 
+
+%For Pears 
+%1st pear image(P1) 
+hsv_value_P1=spalva_color(P1); %color 
+metric_P1=apvalumas_roundness(P1); %roundness 
+%2nd pear image(P2) 
+hsv_value_P2=spalva_color(P2); %color 
+metric_P2=apvalumas_roundness(P2); %roundness 
+%3rd pear image(P3) 
+hsv_value_P3=spalva_color(P3); %color 
+metric_P3=apvalumas_roundness(P3); %roundness 
+%2nd pear image(P4) 
+hsv_value_P4=spalva_color(P4); %color 
+metric_P4=apvalumas_roundness(P4); %roundness 
+
+x1 = [hsv_value_A1, hsv_value_A2, hsv_value_A3, hsv_value_P1, hsv_value_P2]; 
+x2 = [metric_A1, metric_A2, metric_A3, metric_P1, metric_P2]; 
+P = [x1; x2]; 
+T = [1; 1; 1; -1; -1]; % 1: Obuolys, -1: Kriaušė 
+
+%% 2. Duomenų atskyrimas pagal klases 
+idx_apple = find(T == 1); 
+idx_pear  = find(T == -1); 
+N_total = length(T); 
+N_apple = length(idx_apple); 
+N_pear  = length(idx_pear); 
+
+% BAZINIS ŽINOJIMAS (Kiek procentų sudaro obuoliai, kiek kriaušės)
+P_prior_apple = N_apple / N_total; 
+P_prior_pear  = N_pear / N_total; 
+
+%% 3. Mokymas: parametrų (vidurkių ir dispersijų) skaičiavimas 
+% --- MOKYMAS: SUSIKURIAMAS "IDEALAUS" VAISIAUS VAIZDAS ---
+% 'mean' apskaičiuoja idealų vidurkį, o 'std' - kiek leidžiama nukrypti nuo idealo.
+
+% Obuolių idealai ir leistini nukrypimai
+mu_apple_x1 = mean(P(1, idx_apple)); 
+sigma_apple_x1 = std(P(1, idx_apple)); 
+mu_apple_x2 = mean(P(2, idx_apple)); 
+sigma_apple_x2 = std(P(2, idx_apple)); 
+
+% Kriaušių idealai ir leistini nukrypimai
+mu_pear_x1 = mean(P(1, idx_pear)); 
+sigma_pear_x1 = std(P(1, idx_pear)); 
+mu_pear_x2 = mean(P(2, idx_pear)); 
+sigma_pear_x2 = std(P(2, idx_pear)); 
+
+%% 4. Pagalbinė Gauso tikimybės tankio funkcija 
+% Ši funkcija duoda taškų pagal tai, kaip vaisius sutampa su išmoktu idealu.
+gauss_pdf = @(x, mu, sigma) (1 / (sqrt(2 * pi) * sigma)) * exp(-((x - mu).^2) / (2 * sigma^2)); 
+
+%% 5. Testavimas su mokymo rinkiniu  
+disp('--- Mokymo duomenų klasifikavimas ---'); 
+for i = 1:N_total 
+    % --- OBUOLIO VERTINIMAS ---
+    % Duoda taškus už spalvą (px1) ir apvalumą (px2).
+    px1_apple = gauss_pdf(P(1,i), mu_apple_x1, sigma_apple_x1); 
+    px2_apple = gauss_pdf(P(2,i), mu_apple_x2, sigma_apple_x2); 
+    % Visi taškai ir bazinis žinojimas sudauginami į vieną galutinį balą.
+    score_apple = P_prior_apple * px1_apple * px2_apple; 
+
+    % --- KRIAUŠĖS VERTINIMAS ---
+    % Tas pats daroma vertinant panašumą į kriaušę.
+    px1_pear = gauss_pdf(P(1,i), mu_pear_x1, sigma_pear_x1); 
+    px2_pear = gauss_pdf(P(2,i), mu_pear_x2, sigma_pear_x2); 
+    score_pear = P_prior_pear * px1_pear * px2_pear; 
+
+    % Lyginami galutiniai balai. Kas surinko daugiau, tuo vaisiumi ir skelbiama.
+    if score_apple > score_pear 
+        y = 1; 
+    else 
+        y = -1; 
+    end 
+    disp(['Pavyzdys ', num2str(i), ' | Tikras: ', num2str(T(i)), ' | Spėtas: ', num2str(y)]); 
+end 
+
+%% 6. Naujų testinių pavyzdžių (A7 ir P3) klasifikavimas 
+hsv_test_apple = spalva_color(A7); 
+metric_test_apple = apvalumas_roundness(A7); 
+hsv_test_pear = spalva_color(P3); 
+metric_test_pear = apvalumas_roundness(P3); 
+
+P_test = [hsv_test_apple, hsv_test_pear;  
+    metric_test_apple, metric_test_pear]; 
+
+disp(' '); 
+disp('--- Testinių pavyzdžių rezultatai ---'); 
+for j = 1:size(P_test, 2) 
+    val_x1 = P_test(1, j); 
+    val_x2 = P_test(2, j); 
+    
+    % Vėl atliekamas OBUOLIO vertinimas (taškų daugyba) nematytam vaisiui
+    L_apple = P_prior_apple * ... 
+        gauss_pdf(val_x1, mu_apple_x1, sigma_apple_x1) * ... 
+        gauss_pdf(val_x2, mu_apple_x2, sigma_apple_x2); 
+        
+    % Vėl atliekamas KRIAUŠĖS vertinimas (taškų daugyba) nematytam vaisiui
+    L_pear = P_prior_pear * ... 
+        gauss_pdf(val_x1, mu_pear_x1, sigma_pear_x1) * ... 
+        gauss_pdf(val_x2, mu_pear_x2, sigma_pear_x2); 
+        
+    % Sprendimas: laimi didesnis balas
+    if L_apple > L_pear 
+        rezultatas = 'Obuolys'; 
+    else 
+        rezultatas = 'Kriaušė'; 
+    end 
+    disp(['Testinis vaisius Nr. ', num2str(j), ' atpažintas kaip: ', rezultatas]); 
+end
