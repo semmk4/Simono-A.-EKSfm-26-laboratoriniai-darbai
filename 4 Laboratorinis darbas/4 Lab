@@ -1,0 +1,127 @@
+close all  
+clear all  
+clc        
+
+mokymo_failas   = 'train_data_skaiciai.png';  % Mokymo vaizdo failas 
+eiluciu_sk      = 5;    % Eilučių skaičius mokymo vaizde (5 pakartojimai)
+klasiu_sk       = 7;    % Klasių skaičius (skaitmenys: 0, 1, 2, 3, 4, 5, 6)
+neuronu_sk      = 13;   % RBF tinklo paslėptojo sluoksnio neuronų skaičius
+
+% Iškviečiama požymių išskyrimo funkcija mokymo paveikslėliui
+% Grąžinamas celių masyvas su kiekvieno simbolio požymiais
+pozymiai_tinklo_mokymui = pozymiai_raidems_atpazinti(mokymo_failas, eiluciu_sk);
+
+%% =====================================================================
+%% ATPAŽINTUVO (RBF TINKLO) KŪRIMAS IR APMOKYMAS
+%% =====================================================================
+% Požymiai iš celių masyvo sudedami į vieną matricą P
+% Kiekvienas stulpelis – vieno simbolio 35 požymių vektorius
+P = cell2mat(pozymiai_tinklo_mokymui);
+
+rasta_simboliu = size(P, 2);               % Kiek simbolių realiai rasta paveikslėlyje
+tikimasi_simboliu = klasiu_sk * eiluciu_sk; % Kiek simbolių privalo būti (7 * 5 = 35)
+
+fprintf('Mokymo vaizde rasta simbolių: %d (tikimasi: %d)\n', ...
+        rasta_simboliu, tikimasi_simboliu);
+
+% Tikrinama, ar rastas simbolių skaičius sutampa su tikėtinu
+if rasta_simboliu ~= tikimasi_simboliu
+    error(['Nesutampa rastų (%d) ir tikėtų (%d) simbolių skaičius mokymo ' ...
+           'vaizde.\nPatikrinkite figure(6) lange, ar kiekvienas ' ...
+           'skaitmuo iškirptas kaip ATSKIRAS objektas (nei suskeltas ' ...
+           'pusiau, nei sulipęs su kaimyniniu skaitmeniu), ir ar ' ...
+           'kiekvienoje mokymo vaizdo eilutėje parašyta būtent %d ' ...
+           'skaitmenų (klasiu_sk). Jei rašysena su pertrūkiais, ' ...
+           'pabandykite pakeisti strukturinį elementą funkcijoje ' ...
+           'pozymiai_raidems_atpazinti (eilutė "se = strel(''square'',7);") ' ...
+           'į didesnį, kad simbolio dalys susilietų į vieną objektą.'], ...
+           rasta_simboliu, tikimasi_simboliu, klasiu_sk);
+end
+
+% Teisingų atsakymų (target) matrica T: kiekvienai eilutei priskiriama eye(7)
+% Sukuriama "one-hot" matrica: kiekvienas stulpelis nurodo teisingą klasę
+T = repmat(eye(klasiu_sk), 1, eiluciu_sk);
+
+% Sukuriamas ir apmokomas RBF tinklas:
+%   P          - įėjimai (požymiai)
+%   T          - tiksliniai išėjimai
+%   0          - siekiama vidutinė kvadratinė paklaida (Goal = 0)
+%   1          - RBF branduolio plotis (Spread / Sigma = 1)
+%   neuronu_sk - maksimalus neuronų skaičius (13)
+tinklas = newrb(P, T, 0, 1, neuronu_sk);
+
+%% =====================================================================
+%% TINKLO PATIKRA SU MOKYMO AIBĖS DALIMI
+%% =====================================================================
+% Pasirenkama, kurią mokymo eilutę patikrinti (pvz., 2-ąją)
+patikros_eilute  = 2;  
+patikros_pradzia = (patikros_eilute-1)*klasiu_sk + 1; % Pradinis stulpelis (8)
+patikros_pabaiga = patikros_eilute*klasiu_sk;         % Galinis stulpelis (14)
+
+% Paimami tik pasirinktos eilutės duomenys
+P2 = P(:, patikros_pradzia:patikros_pabaiga);
+
+% Tinklo atsako gavimas
+Y2 = sim(tinklas, P2);
+
+% Randamas didžiausias išėjimas (aktyviausias neuronas = atpažinta klasė 1..7)
+[a2, b2] = max(Y2);
+
+%% --- Rezultato atvaizdavimas (mokymo patikros) -----------------------
+atsakymas = atpazink_skaitmenis(b2);
+disp('Atpažinimo patikros (mokymo duomenų dalis) rezultatas:')
+disp(atsakymas)
+
+%% =====================================================================
+%% TESTAVIMAS SU NAUJU VAIZDU (PIRMASIS TESTAS)
+%% =====================================================================
+test_failas = 'test_skaicius1.png';
+
+% Išskiriami testo vaizdo požymiai (nurodyta 1 eilutė)
+pozymiai_patikrai = pozymiai_raidems_atpazinti(test_failas, 1);
+P2 = cell2mat(pozymiai_patikrai);
+
+% Simuliuojamas tinklas su testo požymiais
+Y2 = sim(tinklas, P2);
+[a2, b2] = max(Y2);
+
+% Rezultato spausdinimas ir grafinis atvaizdavimas
+atsakymas = atpazink_skaitmenis(b2);
+disp('Testinio vaizdo atpažinimo rezultatas:')
+disp(atsakymas)
+
+figure(8), text(0.1, 0.5, atsakymas, 'FontSize', 38), axis off
+title(['Atpažinta (neuronų sk. = ', num2str(neuronu_sk), ')'])
+
+%% =====================================================================
+%% ANTRAS TESTINIS VAIZDAS
+%% =====================================================================
+test_failas2 = 'test_skaicius2.png';
+
+% Išskiriami antrojo testo vaizdo požymiai
+pozymiai_patikrai2 = pozymiai_raidems_atpazinti(test_failas2, 1);
+P3 = cell2mat(pozymiai_patikrai2);
+
+% Simuliuojamas tinklas su antrojo testo požymiais
+Y3 = sim(tinklas, P3);
+[a3, b3] = max(Y3);
+
+% Rezultato spausdinimas ir grafinis atvaizdavimas
+atsakymas2 = atpazink_skaitmenis(b3);
+disp('Antro testinio vaizdo atpažinimo rezultatas:')
+disp(atsakymas2)
+
+figure(9), text(0.1, 0.5, atsakymas2, 'FontSize', 38), axis off
+title(['Atpažinta (neuronų sk. = ', num2str(neuronu_sk), ')'])
+
+%% =====================================================================
+%% PAGALBINĖ FUNKCIJA: indeksų (1-7) pavertimas skaitmenų simboliais
+%% =====================================================================
+function atsakymas = atpazink_skaitmenis(indeksai)
+    % Žodynas: 1 indeksas atitinka '0', 2 -> '1', ..., 7 -> '6'
+    skaitmenu_tvarka = ['0','1','2','3','4','5','6'];
+    atsakymas = [];
+    for k = 1:length(indeksai)
+        atsakymas = [atsakymas, skaitmenu_tvarka(indeksai(k))];
+    end
+end
