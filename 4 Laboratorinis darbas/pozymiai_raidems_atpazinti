@@ -1,0 +1,164 @@
+function pozymiai = pozymiai_raidems_atpazinti(pavadinimas, pvz_eiluciu_sk)
+%%  pozymiai = pozymiai_raidems_atpazinti(pavadinimas, pvz_eiluciu_sk)
+% Features = pozymiai_raidems_atpazinti(image_file_name, Number_of_symbols_lines)
+% taikymo pavyzdys:
+% pozymiai = pozymiai_raidems_atpazinti('test_data.png', 8); 
+% example of function use:
+% Feaures = pozymiai_raidems_atpazinti('test_data.png', 8);
+%%
+% 1 ŽINGSNIS: Vaizdo su pavyzdžiais nuskaitymas ir atvaizdavimas
+V = imread(pavadinimas);
+figure(12), imshow(V)
+
+%% 2 ŽINGSNIS: Vaizdo binarizavimas (pavertimas į juodai-baltą)
+% RGB vaizdas konvertuojamas į pilkumo tonus (grayscale)
+V_pustonis = rgb2gray(V);
+
+% Apskaičiuojama slenkstinė reikšmė dvejetainiam vaizdui gauti (Otsu metodas)
+slenkstis = graythresh(V_pustonis);
+
+% Pustonio vaizdo keitimas dvejetainiu (pikseliai tampa 0 arba 1)
+V_dvejetainis = im2bw(V_pustonis,slenkstis);
+figure(1), imshow(V_dvejetainis)
+
+%% 3 ŽINGSNIS: Morfologinis apdorojimas (kontūrai, išplėtimas ir skylių užpildymas)
+% Randami vaizde esančių objektų kontūrai (kraštai)
+V_konturais = edge(uint8(V_dvejetainis));
+figure(2),imshow(V_konturais)
+
+% Apibrėžiamas struktūrinis elementas (7x7 kvadratas)
+se = strel('square',7); 
+
+% Praplečiami kontūrai (dilatacija), kad susijungtų pertrūkusios linijos
+V_uzpildyti = imdilate(V_konturais, se); 
+figure(3),imshow(V_uzpildyti)
+
+% Užpildomos skylės objektų viduje, kad jie taptų vientisais plotais
+V_vientisi= imfill(V_uzpildyti,'holes');
+figure(4),imshow(V_vientisi)
+
+%% 4 ŽINGSNIS: Triukšmo valymas ir objektų žymėjimas
+% Pašalinami smulkūs fragmentai, dėmės ir dulkės, mažesnės nei 50 pikselių
+V_vientisi = bwareaopen(V_vientisi, 50);
+figure(4), imshow(V_vientisi) % Perpiešiamas jau išvalytas vaizdas
+
+% Sunumeruojami visi atskiri objektai dvejetainiame vaizde
+% Skaicius - bendras aptiktų objektų kiekis
+[O_suzymeti Skaicius] = bwlabel(V_vientisi);
+
+% ---------------------------------------------------------------------
+% Diagnostinis išvedimas į komandų eilutę
+% ---------------------------------------------------------------------
+fprintf('--- pozymiai_raidems_atpazinti diagnostika (%s) ---\n', pavadinimas);
+fprintf('Rasta objektų (Skaicius) = %d\n', Skaicius);
+fprintf('Nurodyta eilučių (pvz_eiluciu_sk) = %d\n', pvz_eiluciu_sk);
+fprintf('Skaicius / pvz_eiluciu_sk = %.4f\n', Skaicius/pvz_eiluciu_sk);
+
+% Tikrinama, ar objektų skaičius dalijasi iš eilučių skaičiaus be liekanos
+if mod(Skaicius, pvz_eiluciu_sk) ~= 0
+    error(['pozymiai_raidems_atpazinti: rastas objektų skaičius (%d) ' ...
+           'nesidalija be liekanos iš eilučių skaičiaus (%d).\n' ...
+           'Tikriausiai:\n' ...
+           '  1) ne visose vaizdo "%s" eilutėse parašytas vienodas ' ...
+           'simbolių kiekis, arba\n' ...
+           '  2) kažkuris simbolis segmentavimo metu suskilo į kelis ' ...
+           'objektus (pažiūrėkite figure(4) - ar visi simboliai vientisi), ' ...
+           'arba\n' ...
+           '  3) du gretimi simboliai sulipo į vieną objektą, arba\n' ...
+           '  4) paveikslėlyje yra triukšmo/dėmių, kurias bwlabel ' ...
+           'palaikė atskirais objektais.\n' ...
+           'Peržiūrėkite figure(4) langą ir paskaičiuokite objektus rankiniu ' ...
+           'būdu, kad rastumėte, kurioje vietoje yra neatitikimas.'], ...
+           Skaicius, pvz_eiluciu_sk, pavadinimas);
+end
+% ---------------------------------------------------------------------
+
+%% 5 ŽINGSNIS: Objektų koordinačių nustatymas ir rūšiavimas skaitymo tvarka
+% Apskaičiuojami objektų geometriniai požymiai
+O_pozymiai = regionprops(O_suzymeti);
+
+% Nuskaitomos apribojančių rėmelių (BoundingBox) koordinatės [x, y, w, h]
+O_ribos = [O_pozymiai.BoundingBox];
+O_ribos = reshape(O_ribos,[4 Skaicius]); 
+
+% Nuskaitomos objektų masės centrų koordinatės [x, y]
+O_centras = [O_pozymiai.Centroid];
+O_centras = reshape(O_centras,[2 Skaicius]);
+O_centras = O_centras';
+
+% Pridedamas pirminis objekto indeksas kaip 3-ias stulpelis
+O_centras(:,3) = 1:Skaicius;
+
+% Surūšiuojama iš viršaus į apačią pagal Y ašį (vertikali pozicija)
+O_centras = sortrows(O_centras,2);
+
+% Kiekvienos eilutės viduje surūšiuojama iš kairės į dešinę pagal X ašį (1 stulpelis)
+raidziu_sk = Skaicius/pvz_eiluciu_sk;
+for k = 1:pvz_eiluciu_sk
+    O_centras((k-1)*raidziu_sk+1:k*raidziu_sk,:) = ...
+        sortrows(O_centras((k-1)*raidziu_sk+1:k*raidziu_sk,:),1);
+end
+
+%% 6 ŽINGSNIS: Simbolių fragmentų iškirpimas iš pirminio dvejetainio vaizdo
+for k = 1:Skaicius
+    objektai{k} = imcrop(V_dvejetainis,O_ribos(:,O_centras(k,3)));
+end
+
+% Atvaizduojami visi iškirpti simboliai
+figure(5),
+for k = 1:Skaicius
+   subplot(pvz_eiluciu_sk,raidziu_sk,k), imshow(objektai{k})
+end
+
+%% 7 ŽINGSNIS: Balto fono (tuščių kraštų) apkarpymas aplink simbolį
+for k = 1:Skaicius 
+    V_fragmentas = objektai{k};
+    [aukstis, plotis] = size(V_fragmentas);
+    
+    % 1. Pašalinami visiškai balti stulpeliai (kur suma lygi aukščiui)
+    stulpeliu_sumos = sum(V_fragmentas,1);
+    V_fragmentas(:,stulpeliu_sumos == aukstis) = [];
+    
+    % Perskaičiuojamas dydis po stulpelių pašalinimo
+    [aukstis, plotis] = size(V_fragmentas);
+    
+    % 2. Pašalinamos visiškai baltos eilutės (kur suma lygi pločiui)
+    eiluciu_sumos = sum(V_fragmentas,2);
+    V_fragmentas(eiluciu_sumos == plotis,:) = [];
+    
+    % Įrašomas apkarpytas fragmentas
+    objektai{k}=V_fragmentas;
+end
+
+% Atvaizduojami galutinai apkarpyti simboliai
+figure(6),
+for k = 1:Skaicius
+   subplot(pvz_eiluciu_sk,raidziu_sk,k), imshow(objektai{k})
+end
+
+%% 8 ŽINGSNIS: Dydžių suvienodinimas (70x50) ir 35 požymių išskyrimas
+for k=1:Skaicius
+    V_fragmentas=objektai{k};
+    
+    % Simbolis masteliuojamas į fiksuotą 70x50 pikselių dydį
+    V_fragmentas_7050=imresize(V_fragmentas,[70,50]);
+    
+    % Vaizdas padalijamas į 7x5 tinklelį (kiekviena dalis 10x10 pikselių)
+    for m=1:7
+        for n=1:5
+            % Suskaičiuojama kiekvieno 10x10 bloko pikselių suma
+            Vid_sviesumas_eilutese=sum(V_fragmentas_7050((m*10-9:m*10),(n*10-9:n*10)));
+            Vid_sviesumas((m-1)*5+n)=sum(Vid_sviesumas_eilutese);
+        end
+    end
+    
+    % Reikšmių normavimas į intervalą [0, 1]:
+    % Visiškai baltas 10x10 blokas duoda 100, todėl juodas rašalas įgauna reikšmes arčiau 1
+    Vid_sviesumas = ((100-Vid_sviesumas)/100);
+    
+    % Požymių vektorius (35 reikšmės) paverčiamas stulpeliu
+    Vid_sviesumas = Vid_sviesumas(:);
+    
+    % Išsaugoma į bendrą celių masyvą neuronų tinklui
+    pozymiai{k} = Vid_sviesumas;
+end
