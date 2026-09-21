@@ -1,0 +1,61 @@
+clc
+clear all
+close all
+
+% 1. Duomenų paruošimas (20 taškų)
+x = 0.1:1/22:1;
+d = ((1 + 0.6sin(2pix/0.7)) + 0.3sin(2pix))/2;
+
+figure;
+plot(x, d, 'b-', 'LineWidth', 1.5);
+hold on;
+grid on;
+
+%% Tinklo inicializavimas su centrais ir spinduliais
+c1 = 0.191;   r1 = 0.135;
+c2 = 0.918;   r2 = 0.140;
+
+% Pradiniai svoriai ir poslinkis
+w1 = randn(1);
+w2 = randn(1);
+b = randn(1);
+
+eta = 0.05;
+
+%% Tinklo mokymas
+for iter = 1:35000
+    for i = 1:length(x)
+        % 1 sluoksnio Gauso SBF aktyvacijos
+        F1 = exp(-((x(i) - c1)^2) / (2 r1^2));
+        F2 = exp(-((x(i) - c2)^2) / (2 * r2^2));
+
+        % 2 sluoksnio tiesinė aktyvacija
+        v = F1 * w1 + F2 * w2 + b;
+        y = v;
+
+        % Momentinė klaida
+        e = d(i) - y;
+
+        % Svorių atnaujinimas
+        delta = e;
+        w1 = w1 + eta * delta * F1;
+        w2 = w2 + eta * delta * F2;
+        b  = b  + eta * delta;
+    end
+end
+
+%% Testavimas / kreivės braižymas
+x_new = 0.1:0.005:1;
+Y = zeros(1, length(x_new));
+
+for i = 1:length(x_new)
+    F1 = exp(-((x_new(i) - c1)^2) / (2 * r1^2));
+    F2 = exp(-((x_new(i) - c2)^2) / (2 * r2^2));
+    Y(i) = F1 * w1 + F2 * w2 + b;
+end
+
+plot(x_new, Y, 'r-', 'LineWidth', 2);
+legend('Norimas atsakas (d)', 'Optimizuotas SBF atsakas');
+xlabel('x');
+ylabel('y');
+title('Optimizuota SBF tinklo aproksimacija');
